@@ -3,34 +3,78 @@
 #include <string>
 
 #include "./chess.h"
-/* #include "./lib.h" */
 
 using namespace chess;
 
 constexpr int INF = 9999999;
 constexpr int NINF = -INF;
 
+static constexpr int PAWN_SQ_VALUE[64] = {
+    0,  0,  0,  0,   0,   0,  0,  0,  50, 50, 50,  50, 50, 50,  50, 50,
+    10, 10, 20, 30,  30,  20, 10, 10, 5,  5,  10,  25, 25, 10,  5,  5,
+    0,  0,  0,  20,  20,  0,  0,  0,  5,  -5, -10, 0,  0,  -10, -5, 5,
+    5,  10, 10, -20, -20, 10, 10, 5,  0,  0,  0,   0,  0,  0,   0,  0};
+
+static constexpr int KNIGHT_SQ_VALUE[64] = {
+    -50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0,   0,   0,
+    0,   -20, -40, -30, 0,   10,  15,  15,  10,  0,   -30, -30, 5,
+    15,  20,  20,  15,  5,   -30, -30, 0,   15,  20,  20,  15,  0,
+    -30, -30, 5,   10,  15,  15,  10,  5,   -30, -40, -20, 0,   5,
+    5,   0,   -20, -40, -50, -40, -30, -30, -30, -30, -40, -50,
+};
+
+static constexpr int BISHOP_SQ_VALUE[64] = {
+    -20, -10, -10, -10, -10, -10, -10, -20, -10, 0,   0,   0,   0,
+    0,   0,   -10, -10, 0,   5,   10,  10,  5,   0,   -10, -10, 5,
+    5,   10,  10,  5,   5,   -10, -10, 0,   10,  10,  10,  10,  0,
+    -10, -10, 10,  10,  10,  10,  10,  10,  -10, -10, 5,   0,   0,
+    0,   0,   5,   -10, -20, -10, -10, -10, -10, -10, -10, -20,
+};
+
+static constexpr int ROOK_SQ_VALUE[64] = {
+    0,  0, 0, 0, 0, 0, 0, 0,  5,  10, 10, 10, 10, 10, 10, 5,
+    -5, 0, 0, 0, 0, 0, 0, -5, -5, 0,  0,  0,  0,  0,  0,  -5,
+    -5, 0, 0, 0, 0, 0, 0, -5, -5, 0,  0,  0,  0,  0,  0,  -5,
+    -5, 0, 0, 0, 0, 0, 0, -5, 0,  0,  0,  5,  5,  0,  0,  0};
+
+static constexpr int QUEEN_SQ_VALUE[64] = {
+    -20, -10, -10, -5, -5, -10, -10, -20, -10, 0,   0,   0,  0,  0,   0,   -10,
+    -10, 0,   5,   5,  5,  5,   0,   -10, -5,  0,   5,   5,  5,  5,   0,   -5,
+    0,   0,   5,   5,  5,  5,   0,   -5,  -10, 5,   5,   5,  5,  5,   0,   -10,
+    -10, 0,   5,   0,  0,  0,   0,   -10, -20, -10, -10, -5, -5, -10, -10, -20};
+
+static constexpr int KING_SQ_VALUE[64] = {
+    -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50,
+    -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40,
+    -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30, -30,
+    -20, -10, -20, -20, -20, -20, -20, -20, -10, 20,  20,  0,   0,
+    0,   0,   20,  20,  20,  30,  10,  0,   0,   10,  30,  20};
+
 int Evaluate(const Board &board) {
   int eval = 0;
   for (auto c : {Color::WHITE, Color::BLACK}) {
     int color_eval = 0;
+    auto king = board.pieces(PieceType::KING, c);
     auto queens = board.pieces(PieceType::QUEEN, c);
     auto rooks = board.pieces(PieceType::ROOK, c);
     auto bishops = board.pieces(PieceType::BISHOP, c);
     auto knights = board.pieces(PieceType::KNIGHT, c);
     auto pawns = board.pieces(PieceType::PAWN, c);
 
-    auto f = [&color_eval](auto &pieces, int value) {
+    auto f = [&color_eval, &c](auto &pieces, auto sq_value, int value) {
       while (pieces) {
-        color_eval += value;
-        (void)pieces.pop();
+        auto sq = pieces.pop();
+        if (c == Color::WHITE) sq = 63 - sq;
+        color_eval += value + sq_value[sq];
       }
     };
-    f(queens, 900);
-    f(rooks, 500);
-    f(bishops, 300);
-    f(knights, 300);
-    f(pawns, 100);
+    f(queens, QUEEN_SQ_VALUE, 900);
+    f(rooks, ROOK_SQ_VALUE, 500);
+    f(bishops, BISHOP_SQ_VALUE, 330);
+    f(knights, KNIGHT_SQ_VALUE, 320);
+    f(pawns, PAWN_SQ_VALUE, 100);
+    f(king, KING_SQ_VALUE, 20000);
+
     color_eval *= (c == Color::WHITE) ? 1 : -1;
     eval += color_eval;
   }
@@ -45,9 +89,6 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
 
   Movelist moves;
   movegen::legalmoves<movegen::MoveGenType::ALL>(moves, board);
-  /* for (auto &move : moves) { */
-  /*   ScoreMove(board, move); */
-  /* } */
 
   if (moves.empty()) {
     Color color = board.sideToMove();
