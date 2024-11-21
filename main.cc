@@ -43,17 +43,26 @@ static constexpr int QUEEN_SQ_VALUE[64] = {
     0,   0,   5,   5,  5,  5,   0,   -5,  -10, 5,   5,   5,  5,  5,   0,   -10,
     -10, 0,   5,   0,  0,  0,   0,   -10, -20, -10, -10, -5, -5, -10, -10, -20};
 
-static constexpr int KING_SQ_VALUE[64] = {
+static constexpr int KING_OPENING_SQ_VALUE[64] = {
     -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50,
     -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40,
     -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30, -30,
     -20, -10, -20, -20, -20, -20, -20, -20, -10, 20,  20,  0,   0,
     0,   0,   20,  20,  20,  30,  10,  0,   0,   10,  30,  20};
 
+static constexpr int KING_ENDGAME_SQ_VALUE[64] = {
+    -50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0,   0,
+    -10, -20, -30, -30, -10, 20,  30,  30,  20,  -10, -30, -30, -10,
+    30,  40,  40,  30,  -10, -30, -30, -10, 30,  40,  40,  30,  -10,
+    -30, -30, -10, 20,  30,  30,  20,  -10, -30, -30, -30, 0,   0,
+    0,   0,   -30, -30, -50, -30, -30, -30, -30, -30, -30, -50};
+
 int Evaluate(const Board &board) {
-  int eval = 0;
+  int opening_eval = 0;
+  int endgame_eval = 0;
+  int base_eval = 0;
+  int num_pieces = 0;
   for (auto c : {Color::WHITE, Color::BLACK}) {
-    int color_eval = 0;
     auto king = board.pieces(PieceType::KING, c);
     auto queens = board.pieces(PieceType::QUEEN, c);
     auto rooks = board.pieces(PieceType::ROOK, c);
@@ -61,24 +70,26 @@ int Evaluate(const Board &board) {
     auto knights = board.pieces(PieceType::KNIGHT, c);
     auto pawns = board.pieces(PieceType::PAWN, c);
 
-    auto f = [&color_eval, &c](auto &pieces, auto sq_value, int value) {
+    int sign = (c == Color::WHITE) ? 1 : -1;
+    auto f = [&num_pieces, &c, &sign](int &target, auto &pieces, auto sq_value,
+                                      int value) {
       while (pieces) {
+        num_pieces++;
         auto sq = pieces.pop();
         if (c == Color::WHITE) sq = 63 - sq;
-        color_eval += value + sq_value[sq];
+        target += (value + sq_value[sq]) * sign;
       }
     };
-    f(queens, QUEEN_SQ_VALUE, 900);
-    f(rooks, ROOK_SQ_VALUE, 500);
-    f(bishops, BISHOP_SQ_VALUE, 330);
-    f(knights, KNIGHT_SQ_VALUE, 320);
-    f(pawns, PAWN_SQ_VALUE, 100);
-    f(king, KING_SQ_VALUE, 20000);
-
-    color_eval *= (c == Color::WHITE) ? 1 : -1;
-    eval += color_eval;
+    f(base_eval, queens, QUEEN_SQ_VALUE, 900);
+    f(base_eval, rooks, ROOK_SQ_VALUE, 500);
+    f(base_eval, bishops, BISHOP_SQ_VALUE, 330);
+    f(base_eval, knights, KNIGHT_SQ_VALUE, 320);
+    f(base_eval, pawns, PAWN_SQ_VALUE, 100);
+    f(opening_eval, king, KING_OPENING_SQ_VALUE, 20000);
+    f(endgame_eval, king, KING_ENDGAME_SQ_VALUE, 20000);
   }
-  return eval;
+  float phase = num_pieces / 32.0f;
+  return base_eval + opening_eval * phase + (1 - phase) * endgame_eval;
 }
 
 std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
@@ -87,8 +98,23 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
     return {Evaluate(board), {}};
   }
 
+  // Sort capture moves -> check moves -> quiet moves
+  // for better pruning.
   Movelist moves;
-  movegen::legalmoves<movegen::MoveGenType::ALL>(moves, board);
+  movegen::legalmoves<movegen::MoveGenType::CAPTURE>(moves, board);
+  Movelist quiet_moves;
+  movegen::legalmoves<movegen::MoveGenType::QUIET>(quiet_moves, board);
+  Movelist non_check_moves;
+  for (auto &move : quiet_moves) {
+    board.makeMove(move);
+    if (board.inCheck()) {
+      moves.add(move);
+    } else {
+      non_check_moves.add(move);
+    }
+    board.unmakeMove(move);
+  }
+  for (auto &move : non_check_moves) moves.add(move);
 
   if (moves.empty()) {
     Color color = board.sideToMove();
@@ -154,7 +180,9 @@ int main(int argc, char **argv) {
     std::getline(std::cin, fen);
     Board board = Board(fen);
 
-    auto [eval, move] = minimax(board, depth, NINF, INF, true);
+    // Max for white and min for black.
+    bool maximizing_player = board.sideToMove() == Color::WHITE;
+    auto [eval, move] = minimax(board, depth, NINF, INF, maximizing_player);
 
     if (!move.empty()) {
       std::cout << uci::moveToUci(move.front()) << std::endl;
