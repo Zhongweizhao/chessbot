@@ -119,7 +119,8 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
   if (moves.empty()) {
     Color color = board.sideToMove();
     // Lose
-    if (board.inCheck()) return {(color == Color::WHITE) ? NINF : INF, {}};
+    if (board.inCheck())
+      return {(color == Color::WHITE) ? -999999 : 999999, {}};
     // Draw
     return {0, {}};
   }
