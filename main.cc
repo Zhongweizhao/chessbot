@@ -211,18 +211,8 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
   }
 }
 
-std::pair<int, int> ParseDepthThreshold(const std::string &input) {
-  auto i = input.find('=');
-  return {std::stoi(input.substr(0, i)), std::stoi(input.substr(i + 1))};
-}
-
 int main(int argc, char **argv) {
-  auto [opening_threshold, opening_depth] =
-      ParseDepthThreshold(std::string(argv[1]));
-  auto [middlegame_threshold, middlegame_depth] =
-      ParseDepthThreshold(std::string(argv[2]));
-  auto [endgame_threshold, endgame_depth] =
-      ParseDepthThreshold(std::string(argv[3]));
+  int depth = std::stoi(std::string(argv[1]));
 
   for (;;) {
     std::string fen;
@@ -240,14 +230,6 @@ int main(int argc, char **argv) {
       (void)pieces.pop();
     }
 
-    int depth;
-    if (num_pieces >= opening_threshold)
-      depth = opening_depth;
-    else if (num_pieces >= middlegame_threshold)
-      depth = middlegame_depth;
-    else
-      depth = endgame_depth;
-
     // Max for white and min for black.
     bool maximizing_player = board.sideToMove() == Color::WHITE;
     auto [eval, move] = minimax(board, depth, NINF, INF, maximizing_player);
@@ -263,8 +245,16 @@ int main(int argc, char **argv) {
     auto end = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cerr << "Operation took " << duration.count() << " milliseconds"
-              << std::endl;
+    std::cerr << "Operation of depth " << depth << " took " << duration.count()
+              << " milliseconds" << std::endl;
+    if (duration.count() < 20) {
+      depth++;
+      // std::cerr << "increase adjustment to " << depth << std::endl;
+    } else if (duration.count() > 400) {
+      depth--;
+      // std::cerr << "decrease adjustment to " << depth << std::endl;
+    }
+    depth = std::max(2, depth);
   }
 
   return 0;
