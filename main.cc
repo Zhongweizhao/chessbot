@@ -10,17 +10,24 @@ constexpr int INF = 9999999;
 constexpr int NINF = -INF;
 
 static constexpr int PAWN_SQ_VALUE[64] = {
-    0,  0,  0,  0,   0,   0,  0,  0,  50, 50, 50,  50, 50, 50,  50, 50,
-    10, 10, 20, 30,  30,  20, 10, 10, 5,  5,  10,  25, 25, 10,  5,  5,
-    0,  0,  0,  20,  20,  0,  0,  0,  5,  -5, -10, 0,  0,  -10, -5, 5,
-    5,  10, 10, -20, -20, 10, 10, 5,  0,  0,  0,   0,  0,  0,   0,  0};
+    0,  0,  0,   0,   0,   0,   0,  0,   //
+    50, 50, 50,  50,  50,  50,  50, 50,  //
+    10, 10, 20,  30,  30,  20,  10, 10,  //
+    5,  5,  10,  25,  25,  10,  5,  5,   //
+    0,  0,  0,   20,  20,  0,   0,  0,   //
+    5,  -5, -10, 0,   0,   -10, -5, 5,   //
+    5,  10, 10,  -40, -40, 10,  10, 5,   //
+    0,  0,  0,   0,   0,   0,   0,  0};
 
 static constexpr int KNIGHT_SQ_VALUE[64] = {
-    -50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0,   0,   0,
-    0,   -20, -40, -30, 0,   10,  15,  15,  10,  0,   -30, -30, 5,
-    15,  20,  20,  15,  5,   -30, -30, 0,   15,  20,  20,  15,  0,
-    -30, -30, 5,   10,  15,  15,  10,  5,   -30, -40, -20, 0,   5,
-    5,   0,   -20, -40, -50, -40, -30, -30, -30, -30, -40, -50,
+    -50, -40, -30, -30, -30, -30, -40, -50,  //
+    -40, -20, 0,   0,   0,   0,   -20, -40,  //
+    -30, 0,   10,  15,  15,  10,  0,   -30,  //
+    -30, 5,   15,  20,  20,  15,  5,   -30,  //
+    -30, 0,   15,  20,  20,  15,  0,   -30,  //
+    -30, 5,   10,  15,  15,  10,  5,   -30,  //
+    -40, -20, 0,   5,   5,   0,   -20, -40,  //
+    -50, -40, -30, -30, -30, -30, -40, -50,
 };
 
 static constexpr int BISHOP_SQ_VALUE[64] = {
@@ -174,12 +181,29 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
 }
 
 int main(int argc, char **argv) {
-  int depth = std::stoi(std::string(argv[1]));
+  int opening_depth = std::stoi(std::string(argv[1]));
+  int middlegame_depth = std::stoi(std::string(argv[2]));
+  int endgame_depth = std::stoi(std::string(argv[3]));
 
   for (;;) {
     std::string fen;
     std::getline(std::cin, fen);
     Board board = Board(fen);
+
+    int num_pieces = 0;
+    auto pieces = board.all();
+    while (pieces) {
+      num_pieces++;
+      (void)pieces.pop();
+    }
+
+    int depth;
+    if (num_pieces >= 24)
+      depth = opening_depth;
+    else if (num_pieces >= 12)
+      depth = middlegame_depth;
+    else
+      depth = endgame_depth;
 
     // Max for white and min for black.
     bool maximizing_player = board.sideToMove() == Color::WHITE;
