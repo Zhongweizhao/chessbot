@@ -1,5 +1,6 @@
 #include <iostream>
 #include <list>
+#include <map>
 #include <string>
 
 #include "./chess.h"
@@ -64,6 +65,38 @@ static constexpr int KING_ENDGAME_SQ_VALUE[64] = {
     -30, -30, -10, 20,  30,  30,  20,  -10, -30, -30, -30, 0,   0,
     0,   0,   -30, -30, -50, -30, -30, -30, -30, -30, -30, -50};
 
+static std::map<PackedBoard, int> board_repetition = {};
+
+void Seen(const Board &board) {
+  auto key = Board::Compact::encode(board);
+  auto it = board_repetition.find(key);
+  if (it == board_repetition.end()) {
+    board_repetition[key] = 1;
+    return;
+  }
+  (it->second)++;
+}
+
+void Unseen(const Board &board) {
+  auto key = Board::Compact::encode(board);
+  auto it = board_repetition.find(key);
+  if (it == board_repetition.end()) {
+    return;
+  }
+  (it->second)--;
+}
+
+// Returns true if when the board is reached, it's a three fold repetition.
+bool IsThreeFoldRepetition(const Board &board) {
+  auto key = Board::Compact::encode(board);
+  auto it = board_repetition.find(key);
+  if (it == board_repetition.end()) {
+    return false;
+  }
+  if (it->second >= 3) return true;
+  return false;
+}
+
 int Evaluate(const Board &board) {
   int opening_eval = 0;
   int endgame_eval = 0;
@@ -102,6 +135,9 @@ int Evaluate(const Board &board) {
 std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
                                         int beta, bool maximizing_player) {
   if (depth == 0) {
+    if (IsThreeFoldRepetition(board)) {
+      return {0, {}};
+    }
     return {Evaluate(board), {}};
   }
 
@@ -136,22 +172,11 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
   if (maximizing_player) {
     int max_eval = NINF;
     for (const auto &move : moves) {
-      /* if (depth == 2) */
-      /*   std::cout << "evaluating move " << uci::moveToSan(board, move) << " "
-       */
-      /*             << move.score() << std::endl; */
       board.makeMove(move);
+      Seen(board);
       auto [eval, next_moves] = minimax(board, depth - 1, alpha, beta, false);
-      eval += move.score();
+      Unseen(board);
       board.unmakeMove(move);
-      /* if (depth == 2) { */
-      /*   std::cout << eval; */
-      /*   for (auto next_move : next_moves) { */
-      /*     std::cout << " " << uci::moveToUci(next_move) << " " */
-      /*               << next_move.score(); */
-      /*   } */
-      /*   std::cout << std::endl; */
-      /* } */
       if (eval > max_eval) {
         max_eval = eval;
         next_moves.push_front(move);
@@ -165,8 +190,9 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
     int min_eval = INF;
     for (const auto &move : moves) {
       board.makeMove(move);
+      Seen(board);
       auto [eval, next_moves] = minimax(board, depth - 1, alpha, beta, true);
-      eval -= move.score();
+      Unseen(board);
       board.unmakeMove(move);
       if (eval < min_eval) {
         min_eval = eval;
@@ -190,6 +216,8 @@ int main(int argc, char **argv) {
     std::getline(std::cin, fen);
     Board board = Board(fen);
 
+    Seen(board);
+
     int num_pieces = 0;
     auto pieces = board.all();
     while (pieces) {
@@ -211,6 +239,8 @@ int main(int argc, char **argv) {
 
     if (!move.empty()) {
       std::cout << uci::moveToUci(move.front()) << std::endl;
+      board.makeMove(move.front());
+      Seen(board);
     } else {
       std::cout << "error" << std::endl;
     }
