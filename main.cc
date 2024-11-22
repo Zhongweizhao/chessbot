@@ -68,6 +68,27 @@ static constexpr int KING_ENDGAME_SQ_VALUE[64] = {
 
 static std::map<PackedBoard, int> board_repetition = {};
 
+int node;
+
+// Move score from attacker to victim
+// PAWN KNIGHT BISHOP ROOK QUEEN KING
+static constexpr int MVV_LVA[6][6] = {{105, 205, 305, 405, 505, 605},  //
+                                      {104, 204, 304, 404, 504, 604},  //
+                                      {103, 203, 303, 403, 503, 603},  //
+                                      {102, 202, 302, 402, 502, 602},  //
+                                      {101, 201, 301, 401, 501, 601},  //
+                                      {100, 200, 300, 400, 500, 600}};
+
+void ScoreMove(const Board &board, Move &move) {
+  if (board.isCapture(move)) {
+    auto attacker_type = board.at<PieceType>(move.from());
+    auto victim_type = board.at<PieceType>(move.to());
+    move.setScore(MVV_LVA[attacker_type][victim_type]);
+  } else {
+    move.setScore(0);
+  }
+}
+
 void Seen(const Board &board) {
   auto key = Board::Compact::encode(board);
   auto it = board_repetition.find(key);
@@ -139,6 +160,7 @@ int Evaluate(const Board &board) {
 
 std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
                                         int beta, bool maximizing_player) {
+  node++;
   if (depth == 0) {
     if (IsThreeFoldRepetition(board)) {
       return {0, {}};
@@ -149,20 +171,12 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
   // Sort capture moves -> check moves -> quiet moves
   // for better pruning.
   Movelist moves;
-  movegen::legalmoves<movegen::MoveGenType::CAPTURE>(moves, board);
-  Movelist quiet_moves;
-  movegen::legalmoves<movegen::MoveGenType::QUIET>(quiet_moves, board);
-  Movelist non_check_moves;
-  for (auto &move : quiet_moves) {
-    board.makeMove(move);
-    if (board.inCheck()) {
-      moves.add(move);
-    } else {
-      non_check_moves.add(move);
-    }
-    board.unmakeMove(move);
+  movegen::legalmoves<movegen::MoveGenType::ALL>(moves, board);
+  for (auto &move : moves) {
+    ScoreMove(board, move);
   }
-  for (auto &move : non_check_moves) moves.add(move);
+  std::sort(moves.begin(), moves.end(),
+            [](const Move &a, const Move &b) { return a.score() > b.score(); });
 
   if (moves.empty()) {
     Color color = board.sideToMove();
@@ -215,6 +229,8 @@ int main(int argc, char **argv) {
   int depth = std::stoi(std::string(argv[1]));
 
   for (;;) {
+    node = 0;
+
     std::string fen;
     std::getline(std::cin, fen);
 
@@ -246,7 +262,7 @@ int main(int argc, char **argv) {
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cerr << "Operation of depth " << depth << " took " << duration.count()
-              << " milliseconds" << std::endl;
+              << " milliseconds, node: " << node << std::endl;
     if (duration.count() < 20) {
       depth++;
       // std::cerr << "increase adjustment to " << depth << std::endl;
