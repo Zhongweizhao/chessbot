@@ -93,16 +93,6 @@ static constexpr int MVV_LVA[6][6] = {{105, 205, 305, 405, 505, 605},  //
                                       {101, 201, 301, 401, 501, 601},  //
                                       {100, 200, 300, 400, 500, 600}};
 
-void ScoreMove(const Board &board, Move &move) {
-  if (board.isCapture(move)) {
-    auto attacker_type = board.at<PieceType>(move.from());
-    auto victim_type = board.at<PieceType>(move.to());
-    move.setScore(MVV_LVA[attacker_type][victim_type]);
-  } else {
-    move.setScore(0);
-  }
-}
-
 void Seen(const Board &board) {
   auto key = Board::Compact::encode(board);
   auto it = board_repetition.find(key);
@@ -172,19 +162,85 @@ int Evaluate(const Board &board) {
   return base_eval + opening_eval * phase + (1 - phase) * endgame_eval;
 }
 
-Move best_move = Move::NO_MOVE;
+// Move best_move = Move::NO_MOVE;
+Move killer_moves[2][64];
+int history_moves_score[12][64];
+Move pv_table[64][64];
+
 int ply = 0;
-int node;
+int nodes;
+
+void PvToStderr() {
+  for (int i = 0; i < 64; ++i) {
+    const Move &move = pv_table[0][i];
+    if (move == Move::NO_MOVE) return;
+    if (i != 0) std::cerr << " ";
+    std::cerr << uci::moveToUci(move);
+  }
+}
+
+void ScoreMove(const Board &board, Move &move) {
+  auto attacker_type = board.at<PieceType>(move.from());
+  auto target_sq = move.to();
+  if (board.isCapture(move)) {
+    auto victim_type = board.at<PieceType>(target_sq);
+    move.setScore(MVV_LVA[attacker_type][victim_type] + 10000);
+  } else if (killer_moves[0][ply] == move) {
+    move.setScore(9000);
+  } else if (killer_moves[1][ply] == move) {
+    move.setScore(8000);
+  } else {
+    int piece_index = board.sideToMove() * 6 + attacker_type;
+    move.setScore(history_moves_score[piece_index][target_sq.index()]);
+  }
+}
+
+int quiescence(Board &board, int alpha, int beta) {
+  nodes++;
+
+  int eval =
+      (board.sideToMove() == Color::WHITE) ? Evaluate(board) : -Evaluate(board);
+  if (eval >= beta) {
+    return beta;
+  }
+  if (eval > alpha) {
+    alpha = eval;
+  }
+
+  Movelist moves;
+  movegen::legalmoves<movegen::MoveGenType::CAPTURE>(moves, board);
+
+  for (const auto &move : moves) {
+    board.makeMove(move);
+    ply++;
+    eval = -quiescence(board, -beta, -alpha);
+    ply--;
+    board.unmakeMove(move);
+    if (eval >= beta) {
+      return beta;
+    }
+    if (eval > alpha) {
+      alpha = eval;
+    }
+  }
+
+  return alpha;
+}
 
 int negamax(Board &board, int depth, int alpha, int beta) {
-  node++;
+  if (IsThreeFoldRepetition(board)) {
+    return 0;
+  }
   if (depth == 0) {
-    if (IsThreeFoldRepetition(board)) {
-      return 0;
-    }
+    return quiescence(board, alpha, beta);
+  }
+
+  if (ply > 63) {
     return (board.sideToMove() == Color::WHITE) ? Evaluate(board)
                                                 : -Evaluate(board);
   }
+
+  nodes++;
 
   // Score moves for better pruning.
   Movelist moves;
@@ -203,8 +259,6 @@ int negamax(Board &board, int depth, int alpha, int beta) {
     return 0;
   }
 
-  Move local_best = Move::NO_MOVE;
-  int old_alpha = alpha;
   for (const auto &move : moves) {
     board.makeMove(move);
     Seen(board);
@@ -213,14 +267,29 @@ int negamax(Board &board, int depth, int alpha, int beta) {
     ply--;
     Unseen(board);
     board.unmakeMove(move);
-    if (eval > alpha) {
-      alpha = eval;
-      local_best = move;
+    if (eval >= beta) {
+      if (!board.isCapture(move)) {
+        killer_moves[1][ply] = killer_moves[0][ply];
+        killer_moves[0][ply] = move;
+      }
+      return beta;
     }
-    alpha = std::max(alpha, eval);
-    if (beta <= alpha) break;
+    if (eval > alpha) {
+      if (!board.isCapture(move)) {
+        auto attacker_type = board.at<PieceType>(move.from());
+        int piece_index = board.sideToMove() * 6 + attacker_type;
+        history_moves_score[piece_index][move.to().index()] += depth;
+      }
+      alpha = eval;
+
+      pv_table[ply][ply] = move;
+      for (int next_ply = ply + 1; next_ply < 64; next_ply++) {
+        auto next = pv_table[ply + 1][next_ply];
+        if (next == Move::NO_MOVE) break;
+        pv_table[ply][next_ply] = next;
+      }
+    }
   }
-  best_move = local_best;
   return alpha;
 }
 
@@ -228,9 +297,17 @@ int main(int argc, char **argv) {
   int depth = std::stoi(std::string(argv[1]));
 
   for (;;) {
-    node = 0;
-    best_move = Move::NO_MOVE;
+    nodes = 0;
     ply = 0;
+    for (int i = 0; i < 2; ++i) {
+      std::fill(killer_moves[i], killer_moves[i] + 64, Move::NO_MOVE);
+    }
+    for (int i = 0; i < 12; ++i) {
+      std::fill(history_moves_score[i], history_moves_score[i] + 64, 0);
+    }
+    for (int i = 0; i < 64; ++i) {
+      std::fill(pv_table[i], pv_table[i] + 64, Move::NO_MOVE);
+    }
 
     std::string fen;
     std::getline(std::cin, fen);
@@ -251,8 +328,14 @@ int main(int argc, char **argv) {
     bool maximizing_player = board.sideToMove() == Color::WHITE;
     auto eval = negamax(board, depth, NINF, INF);
 
+    auto best_move = pv_table[0][0];
     if (best_move != Move::NO_MOVE) {
       std::cout << uci::moveToUci(best_move) << std::endl;
+      std::cerr << std::showpos
+                << (board.sideToMove() == Color::WHITE ? eval : -eval)
+                << std::noshowpos << " pv ";
+      PvToStderr();
+      std::cerr << ", ";
       board.makeMove(best_move);
       Seen(board);
     } else {
@@ -262,14 +345,14 @@ int main(int argc, char **argv) {
     auto end = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cerr << "Operation of depth " << depth << " took " << duration.count()
-              << " milliseconds, node: " << node << std::endl;
-    if (duration.count() < 20) {
+    std::cerr << "depth " << depth << ", time: " << duration.count()
+              << " milliseconds, nodes: " << nodes << std::endl;
+    if (duration.count() < 50) {
       depth++;
-      // std::cerr << "increase adjustment to " << depth << std::endl;
+    } else if (duration.count() > 1000) {
+      depth -= 2;
     } else if (duration.count() > 400) {
       depth--;
-      // std::cerr << "decrease adjustment to " << depth << std::endl;
     }
     depth = std::max(2, depth);
   }
