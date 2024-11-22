@@ -169,6 +169,7 @@ Move pv_table[64][64];
 
 int ply = 0;
 int nodes;
+bool follow_pv;
 
 void PvToStderr() {
   for (int i = 0; i < 64; ++i) {
@@ -192,6 +193,24 @@ void ScoreMove(const Board &board, Move &move) {
   } else {
     int piece_index = board.sideToMove() * 6 + attacker_type;
     move.setScore(history_moves_score[piece_index][target_sq.index()]);
+  }
+}
+
+void ScoreMoves(const Board &board, Movelist &moves) {
+  Move *pv_move = nullptr;
+  for (auto &move : moves) {
+    ScoreMove(board, move);
+    if (move == pv_table[0][ply]) pv_move = &move;
+  }
+  if (follow_pv) {
+    if (pv_move == nullptr) {
+      follow_pv = false;
+    } else {
+      // give pv_move highest sore
+      // std::cerr << "current pv move " << *pv_move << " ply " << ply
+      //           << std::endl;
+      pv_move->setScore(20000);
+    }
   }
 }
 
@@ -245,9 +264,7 @@ int negamax(Board &board, int depth, int alpha, int beta) {
   // Score moves for better pruning.
   Movelist moves;
   movegen::legalmoves<movegen::MoveGenType::ALL>(moves, board);
-  for (auto &move : moves) {
-    ScoreMove(board, move);
-  }
+  ScoreMoves(board, moves);
   std::sort(moves.begin(), moves.end(),
             [](const Move &a, const Move &b) { return a.score() > b.score(); });
 
@@ -293,60 +310,73 @@ int negamax(Board &board, int depth, int alpha, int beta) {
   return alpha;
 }
 
+void ResetGlobal() {
+  nodes = 0;
+  ply = 0;
+  for (int i = 0; i < 2; ++i) {
+    std::fill(killer_moves[i], killer_moves[i] + 64, Move::NO_MOVE);
+  }
+  for (int i = 0; i < 12; ++i) {
+    std::fill(history_moves_score[i], history_moves_score[i] + 64, 0);
+  }
+  for (int i = 0; i < 64; ++i) {
+    std::fill(pv_table[i], pv_table[i] + 64, Move::NO_MOVE);
+  }
+  follow_pv = false;
+}
+
+void search(std::string &fen, int depth) {
+  ResetGlobal();
+
+  Board board = Board(fen);
+
+  // Track the board state after the opponent played, for third fold repetition
+  // check.
+  Seen(board);
+
+  auto eval = 0;
+  for (int current_depth = 1; current_depth <= depth; current_depth++) {
+    nodes = 0;
+
+    follow_pv = 1;
+    eval = negamax(board, current_depth, NINF, INF);
+
+    if (current_depth == depth) {
+      std::cerr << "iteration " << current_depth << " eval " << std::showpos
+                << (board.sideToMove() == Color::WHITE ? eval : -eval)
+                << std::noshowpos << " pv ";
+      PvToStderr();
+      std::cerr << " nodes " << nodes << std::endl;
+    }
+  }
+
+  auto best_move = pv_table[0][0];
+  if (best_move != Move::NO_MOVE) {
+    std::cout << uci::moveToUci(best_move) << std::endl;
+
+    board.makeMove(best_move);
+    Seen(board);
+  } else {
+    std::cout << "error" << std::endl;
+  }
+}
+
 int main(int argc, char **argv) {
   int depth = std::stoi(std::string(argv[1]));
 
   for (;;) {
-    nodes = 0;
-    ply = 0;
-    for (int i = 0; i < 2; ++i) {
-      std::fill(killer_moves[i], killer_moves[i] + 64, Move::NO_MOVE);
-    }
-    for (int i = 0; i < 12; ++i) {
-      std::fill(history_moves_score[i], history_moves_score[i] + 64, 0);
-    }
-    for (int i = 0; i < 64; ++i) {
-      std::fill(pv_table[i], pv_table[i] + 64, Move::NO_MOVE);
-    }
-
     std::string fen;
     std::getline(std::cin, fen);
 
     auto start = std::chrono::high_resolution_clock::now();
-    Board board = Board(fen);
 
-    Seen(board);
-
-    int num_pieces = 0;
-    auto pieces = board.all();
-    while (pieces) {
-      num_pieces++;
-      (void)pieces.pop();
-    }
-
-    // Max for white and min for black.
-    bool maximizing_player = board.sideToMove() == Color::WHITE;
-    auto eval = negamax(board, depth, NINF, INF);
-
-    auto best_move = pv_table[0][0];
-    if (best_move != Move::NO_MOVE) {
-      std::cout << uci::moveToUci(best_move) << std::endl;
-      std::cerr << std::showpos
-                << (board.sideToMove() == Color::WHITE ? eval : -eval)
-                << std::noshowpos << " pv ";
-      PvToStderr();
-      std::cerr << ", ";
-      board.makeMove(best_move);
-      Seen(board);
-    } else {
-      std::cout << "error" << std::endl;
-    }
+    search(fen, depth);
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cerr << "depth " << depth << ", time: " << duration.count()
-              << " milliseconds, nodes: " << nodes << std::endl;
+              << " milliseconds" << std::endl;
     if (duration.count() < 50) {
       depth++;
     } else if (duration.count() > 1000) {
