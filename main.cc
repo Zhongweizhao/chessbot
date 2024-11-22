@@ -1,3 +1,4 @@
+#include <chrono>
 #include <iostream>
 #include <list>
 #include <map>
@@ -206,14 +207,24 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
   }
 }
 
+std::pair<int, int> ParseDepthThreshold(const std::string &input) {
+  auto i = input.find('=');
+  return {std::stoi(input.substr(0, i)), std::stoi(input.substr(i + 1))};
+}
+
 int main(int argc, char **argv) {
-  int opening_depth = std::stoi(std::string(argv[1]));
-  int middlegame_depth = std::stoi(std::string(argv[2]));
-  int endgame_depth = std::stoi(std::string(argv[3]));
+  auto [opening_threshold, opening_depth] =
+      ParseDepthThreshold(std::string(argv[1]));
+  auto [middlegame_threshold, middlegame_depth] =
+      ParseDepthThreshold(std::string(argv[2]));
+  auto [endgame_threshold, endgame_depth] =
+      ParseDepthThreshold(std::string(argv[3]));
 
   for (;;) {
     std::string fen;
     std::getline(std::cin, fen);
+
+    auto start = std::chrono::high_resolution_clock::now();
     Board board = Board(fen);
 
     Seen(board);
@@ -226,9 +237,9 @@ int main(int argc, char **argv) {
     }
 
     int depth;
-    if (num_pieces >= 24)
+    if (num_pieces >= opening_threshold)
       depth = opening_depth;
-    else if (num_pieces >= 12)
+    else if (num_pieces >= middlegame_threshold)
       depth = middlegame_depth;
     else
       depth = endgame_depth;
@@ -244,6 +255,12 @@ int main(int argc, char **argv) {
     } else {
       std::cout << "error" << std::endl;
     }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cerr << "Operation took " << duration.count() << " milliseconds"
+              << std::endl;
   }
 
   return 0;
