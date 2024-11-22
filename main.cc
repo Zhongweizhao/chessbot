@@ -276,11 +276,24 @@ int negamax(Board &board, int depth, int alpha, int beta) {
     return 0;
   }
 
+  bool found_pv = false;
+
   for (const auto &move : moves) {
     board.makeMove(move);
     Seen(board);
     ply++;
-    auto eval = -negamax(board, depth - 1, -beta, -alpha);
+
+    // Principal variation search
+    int eval = 0;
+    if (found_pv) {
+      eval = -negamax(board, depth - 1, -alpha - 1, -alpha);
+      if (eval > alpha && eval < beta) {
+        eval = -negamax(board, depth - 1, -beta, -alpha);
+      }
+    } else {
+      eval = -negamax(board, depth - 1, -beta, -alpha);
+    }
+
     ply--;
     Unseen(board);
     board.unmakeMove(move);
@@ -298,6 +311,8 @@ int negamax(Board &board, int depth, int alpha, int beta) {
         history_moves_score[piece_index][move.to().index()] += depth;
       }
       alpha = eval;
+
+      found_pv = true;
 
       pv_table[ply][ply] = move;
       for (int next_ply = ply + 1; next_ply < 64; next_ply++) {
@@ -336,19 +351,14 @@ void search(std::string &fen, int depth) {
 
   auto eval = 0;
   for (int current_depth = 1; current_depth <= depth; current_depth++) {
-    nodes = 0;
-
     follow_pv = 1;
     eval = negamax(board, current_depth, NINF, INF);
-
-    if (current_depth == depth) {
-      std::cerr << "iteration " << current_depth << " eval " << std::showpos
-                << (board.sideToMove() == Color::WHITE ? eval : -eval)
-                << std::noshowpos << " pv ";
-      PvToStderr();
-      std::cerr << " nodes " << nodes << std::endl;
-    }
   }
+  std::cerr << "iteration " << depth << " eval " << std::showpos
+            << (board.sideToMove() == Color::WHITE ? eval : -eval)
+            << std::noshowpos << " pv ";
+  PvToStderr();
+  std::cerr << " nodes " << nodes << std::endl;
 
   auto best_move = pv_table[0][0];
   if (best_move != Move::NO_MOVE) {
