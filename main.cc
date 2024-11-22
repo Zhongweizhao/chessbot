@@ -33,42 +33,56 @@ static constexpr int KNIGHT_SQ_VALUE[64] = {
 };
 
 static constexpr int BISHOP_SQ_VALUE[64] = {
-    -20, -10, -10, -10, -10, -10, -10, -20, -10, 0,   0,   0,   0,
-    0,   0,   -10, -10, 0,   5,   10,  10,  5,   0,   -10, -10, 5,
-    5,   10,  10,  5,   5,   -10, -10, 0,   10,  10,  10,  10,  0,
-    -10, -10, 10,  10,  10,  10,  10,  10,  -10, -10, 5,   0,   0,
-    0,   0,   5,   -10, -20, -10, -10, -10, -10, -10, -10, -20,
+    -20, -10, -10, -10, -10, -10, -10, -20,  //
+    -10, 0,   0,   0,   0,   0,   0,   -10,  //
+    -10, 0,   5,   10,  10,  5,   0,   -10,  //
+    -10, 5,   5,   10,  10,  5,   5,   -10,  //
+    -10, 0,   10,  10,  10,  10,  0,   -10,  //
+    -10, 10,  10,  10,  10,  10,  10,  -10,  //
+    -10, 5,   0,   0,   0,   0,   5,   -10,  //
+    -20, -10, -10, -10, -10, -10, -10, -20,
 };
 
-static constexpr int ROOK_SQ_VALUE[64] = {
-    0,  0, 0, 0, 0, 0, 0, 0,  5,  10, 10, 10, 10, 10, 10, 5,
-    -5, 0, 0, 0, 0, 0, 0, -5, -5, 0,  0,  0,  0,  0,  0,  -5,
-    -5, 0, 0, 0, 0, 0, 0, -5, -5, 0,  0,  0,  0,  0,  0,  -5,
-    -5, 0, 0, 0, 0, 0, 0, -5, 0,  0,  0,  5,  5,  0,  0,  0};
+static constexpr int ROOK_SQ_VALUE[64] = {0,  0,  0,  0,  0,  0,  0,  0,   //
+                                          5,  10, 10, 10, 10, 10, 10, 5,   //
+                                          -5, 0,  0,  0,  0,  0,  0,  -5,  //
+                                          -5, 0,  0,  0,  0,  0,  0,  -5,  //
+                                          -5, 0,  0,  0,  0,  0,  0,  -5,  //
+                                          -5, 0,  0,  0,  0,  0,  0,  -5,  //
+                                          -5, 0,  0,  0,  0,  0,  0,  -5,  //
+                                          0,  0,  0,  5,  5,  0,  0,  0};
 
 static constexpr int QUEEN_SQ_VALUE[64] = {
-    -20, -10, -10, -5, -5, -10, -10, -20, -10, 0,   0,   0,  0,  0,   0,   -10,
-    -10, 0,   5,   5,  5,  5,   0,   -10, -5,  0,   5,   5,  5,  5,   0,   -5,
-    0,   0,   5,   5,  5,  5,   0,   -5,  -10, 5,   5,   5,  5,  5,   0,   -10,
-    -10, 0,   5,   0,  0,  0,   0,   -10, -20, -10, -10, -5, -5, -10, -10, -20};
+    -20, -10, -10, -5, -5, -10, -10, -20,  //
+    -10, 0,   0,   0,  0,  0,   0,   -10,  //
+    -10, 0,   5,   5,  5,  5,   0,   -10,  //
+    -5,  0,   5,   5,  5,  5,   0,   -5,   //
+    0,   0,   5,   5,  5,  5,   0,   -5,   //
+    -10, 5,   5,   5,  5,  5,   0,   -10,  //
+    -10, 0,   5,   0,  0,  0,   0,   -10,  //
+    -20, -10, -10, -5, -5, -10, -10, -20};
 
 static constexpr int KING_OPENING_SQ_VALUE[64] = {
-    -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50,
-    -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40,
-    -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30, -30,
-    -20, -10, -20, -20, -20, -20, -20, -20, -10, 20,  20,  0,   0,
-    0,   0,   20,  20,  20,  30,  10,  0,   0,   10,  30,  20};
+    -30, -40, -40, -50, -50, -40, -40, -30,  //
+    -30, -40, -40, -50, -50, -40, -40, -30,  //
+    -30, -40, -40, -50, -50, -40, -40, -30,  //
+    -30, -40, -40, -50, -50, -40, -40, -30,  //
+    -20, -30, -30, -40, -40, -30, -30, -20,  //
+    -10, -20, -20, -20, -20, -20, -20, -10,  //
+    20,  20,  0,   0,   0,   0,   20,  20,   //
+    20,  30,  10,  0,   0,   10,  30,  20};
 
 static constexpr int KING_ENDGAME_SQ_VALUE[64] = {
-    -50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0,   0,
-    -10, -20, -30, -30, -10, 20,  30,  30,  20,  -10, -30, -30, -10,
-    30,  40,  40,  30,  -10, -30, -30, -10, 30,  40,  40,  30,  -10,
-    -30, -30, -10, 20,  30,  30,  20,  -10, -30, -30, -30, 0,   0,
-    0,   0,   -30, -30, -50, -30, -30, -30, -30, -30, -30, -50};
+    -50, -40, -30, -20, -20, -30, -40, -50,  //
+    -30, -20, -10, 0,   0,   -10, -20, -30,  //
+    -30, -10, 20,  30,  30,  20,  -10, -30,  //
+    -30, -10, 30,  40,  40,  30,  -10, -30,  //
+    -30, -10, 30,  40,  40,  30,  -10, -30,  //
+    -30, -10, 20,  30,  30,  20,  -10, -30,  //
+    -30, -30, 0,   0,   0,   0,   -30, -30,  //
+    -50, -30, -30, -30, -30, -30, -30, -50};
 
 static std::map<PackedBoard, int> board_repetition = {};
-
-int node;
 
 // Move score from attacker to victim
 // PAWN KNIGHT BISHOP ROOK QUEEN KING
@@ -158,18 +172,21 @@ int Evaluate(const Board &board) {
   return base_eval + opening_eval * phase + (1 - phase) * endgame_eval;
 }
 
-std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
-                                        int beta, bool maximizing_player) {
+Move best_move = Move::NO_MOVE;
+int ply = 0;
+int node;
+
+int negamax(Board &board, int depth, int alpha, int beta) {
   node++;
   if (depth == 0) {
     if (IsThreeFoldRepetition(board)) {
-      return {0, {}};
+      return 0;
     }
-    return {Evaluate(board), {}};
+    return (board.sideToMove() == Color::WHITE) ? Evaluate(board)
+                                                : -Evaluate(board);
   }
 
-  // Sort capture moves -> check moves -> quiet moves
-  // for better pruning.
+  // Score moves for better pruning.
   Movelist moves;
   movegen::legalmoves<movegen::MoveGenType::ALL>(moves, board);
   for (auto &move : moves) {
@@ -181,48 +198,30 @@ std::pair<int, std::list<Move>> minimax(Board &board, int depth, int alpha,
   if (moves.empty()) {
     Color color = board.sideToMove();
     // Lose
-    if (board.inCheck())
-      return {(color == Color::WHITE) ? -999999 : 999999, {}};
+    if (board.inCheck()) return -999999 + ply;
     // Draw
-    return {0, {}};
+    return 0;
   }
 
-  std::list<Move> best_moves;
-  if (maximizing_player) {
-    int max_eval = NINF;
-    for (const auto &move : moves) {
-      board.makeMove(move);
-      Seen(board);
-      auto [eval, next_moves] = minimax(board, depth - 1, alpha, beta, false);
-      Unseen(board);
-      board.unmakeMove(move);
-      if (eval > max_eval) {
-        max_eval = eval;
-        next_moves.push_front(move);
-        best_moves = next_moves;
-      }
-      alpha = std::max(alpha, eval);
-      if (beta <= alpha) break;
+  Move local_best = Move::NO_MOVE;
+  int old_alpha = alpha;
+  for (const auto &move : moves) {
+    board.makeMove(move);
+    Seen(board);
+    ply++;
+    auto eval = -negamax(board, depth - 1, -beta, -alpha);
+    ply--;
+    Unseen(board);
+    board.unmakeMove(move);
+    if (eval > alpha) {
+      alpha = eval;
+      local_best = move;
     }
-    return {max_eval, best_moves};
-  } else {
-    int min_eval = INF;
-    for (const auto &move : moves) {
-      board.makeMove(move);
-      Seen(board);
-      auto [eval, next_moves] = minimax(board, depth - 1, alpha, beta, true);
-      Unseen(board);
-      board.unmakeMove(move);
-      if (eval < min_eval) {
-        min_eval = eval;
-        next_moves.push_front(move);
-        best_moves = next_moves;
-      }
-      beta = std::min(beta, eval);
-      if (beta <= alpha) break;
-    }
-    return {min_eval, best_moves};
+    alpha = std::max(alpha, eval);
+    if (beta <= alpha) break;
   }
+  best_move = local_best;
+  return alpha;
 }
 
 int main(int argc, char **argv) {
@@ -230,6 +229,8 @@ int main(int argc, char **argv) {
 
   for (;;) {
     node = 0;
+    best_move = Move::NO_MOVE;
+    ply = 0;
 
     std::string fen;
     std::getline(std::cin, fen);
@@ -248,11 +249,11 @@ int main(int argc, char **argv) {
 
     // Max for white and min for black.
     bool maximizing_player = board.sideToMove() == Color::WHITE;
-    auto [eval, move] = minimax(board, depth, NINF, INF, maximizing_player);
+    auto eval = negamax(board, depth, NINF, INF);
 
-    if (!move.empty()) {
-      std::cout << uci::moveToUci(move.front()) << std::endl;
-      board.makeMove(move.front());
+    if (best_move != Move::NO_MOVE) {
+      std::cout << uci::moveToUci(best_move) << std::endl;
+      board.makeMove(best_move);
       Seen(board);
     } else {
       std::cout << "error" << std::endl;
