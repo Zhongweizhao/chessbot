@@ -84,6 +84,10 @@ void Unseen(const Board &board) {
   if (it == board_repetition.end()) {
     return;
   }
+  if (it->second == 1) {
+    board_repetition.erase(key);
+    return;
+  }
   (it->second)--;
 }
 
