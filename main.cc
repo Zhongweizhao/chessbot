@@ -170,6 +170,7 @@ Move pv_table[64][64];
 int ply = 0;
 int nodes;
 bool follow_pv;
+int remaining_time_ms = 0;
 
 void PvToStderr() {
   for (int i = 0; i < 64; ++i) {
@@ -247,6 +248,9 @@ int quiescence(Board &board, int alpha, int beta) {
 }
 
 int negamax(Board &board, int depth, int alpha, int beta) {
+  constexpr static int FULL_DEPTH_MOVE = 4;
+  constexpr static int REDUCTION_LIMIT = 3;
+
   if (IsThreeFoldRepetition(board)) {
     return 0;
   }
@@ -277,26 +281,40 @@ int negamax(Board &board, int depth, int alpha, int beta) {
   }
 
   bool found_pv = false;
+  int moves_searched = 0;
+  bool is_in_check = board.inCheck();
 
   for (const auto &move : moves) {
     board.makeMove(move);
     Seen(board);
     ply++;
 
-    // Principal variation search
+    // first move
     int eval = 0;
-    if (found_pv) {
-      eval = -negamax(board, depth - 1, -alpha - 1, -alpha);
-      if (eval > alpha && eval < beta) {
-        eval = -negamax(board, depth - 1, -beta, -alpha);
-      }
-    } else {
+    if (moves_searched == 0) {
       eval = -negamax(board, depth - 1, -beta, -alpha);
+    } else {
+      auto full_depth_search = [&]() {
+        // Principal variation search, mixed with last move reduction
+        eval = -negamax(board, depth - 1, -alpha - 1, -alpha);
+        if (eval > alpha && eval < beta) {
+          eval = -negamax(board, depth - 1, -beta, -alpha);
+        }
+      };
+      // late move reduction
+      if (moves_searched >= FULL_DEPTH_MOVE && depth >= REDUCTION_LIMIT &&
+          !is_in_check) {
+        eval = -negamax(board, depth - 2, -alpha - 1, -alpha);
+        if (eval > alpha) full_depth_search();
+      } else {
+        full_depth_search();
+      }
     }
 
     ply--;
     Unseen(board);
     board.unmakeMove(move);
+    moves_searched++;
     if (eval >= beta) {
       if (!board.isCapture(move)) {
         killer_moves[1][ply] = killer_moves[0][ply];
@@ -338,6 +356,9 @@ void ResetGlobal() {
     std::fill(pv_table[i], pv_table[i] + 64, Move::NO_MOVE);
   }
   follow_pv = false;
+  // Remaining time ms:
+  // 10 seconds = 10000
+  remaining_time_ms = 10000;
 }
 
 void search(std::string &fen, int depth) {
@@ -372,6 +393,7 @@ void search(std::string &fen, int depth) {
 }
 
 int main(int argc, char **argv) {
+  std::cerr << "start" << std::endl;
   int depth = std::stoi(std::string(argv[1]));
 
   for (;;) {
@@ -389,12 +411,13 @@ int main(int argc, char **argv) {
               << " milliseconds" << std::endl;
     if (duration.count() < 50) {
       depth++;
-    } else if (duration.count() > 1000) {
+    } else if (duration.count() > 800) {
       depth -= 2;
     } else if (duration.count() > 400) {
       depth--;
     }
     depth = std::max(2, depth);
+    depth = std::min(9, depth);
   }
 
   return 0;
