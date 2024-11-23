@@ -83,7 +83,7 @@ static constexpr int KING_ENDGAME_SQ_VALUE[64] = {
     -50, -30, -30, -30, -30, -30, -30, -50};
 
 static std::map<PackedBoard, int> board_repetition = {};
-int time_remaining_ms = 9900;
+int time_remaining_ms = 0;
 
 // Move score from attacker to victim
 // PAWN KNIGHT BISHOP ROOK QUEEN KING
@@ -385,8 +385,7 @@ void search(std::string &fen) {
   ResetGlobal();
 
   int extra_time = 0;
-  if (time_remaining_ms >= 99) {
-    time_remaining_ms -= 99;
+  if (time_remaining_ms >= 250) {
     extra_time = 99;
   }
   const std::chrono::time_point<std::chrono::high_resolution_clock> deadline =
@@ -423,15 +422,6 @@ void search(std::string &fen) {
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
           .count();
 
-  // The extra time taken from the 10 seconds pool should be given back.
-  if (duration_ms < 99) {
-    time_remaining_ms += extra_time;
-  } else if (duration_ms < 99 + extra_time) {
-    // Here I used all 99 milliseconds from the step time and I've used some
-    // more time.
-    time_remaining_ms += std::max(0, (99 + int(extra_time - duration_ms)));
-  }
-
   std::cerr << "iteration " << completed_depth << " eval " << std::showpos
             << (board.sideToMove() == Color::WHITE ? eval : -eval)
             << std::noshowpos << " pv ";
@@ -457,6 +447,10 @@ int main(int argc, char **argv) {
   for (;;) {
     std::string fen;
     std::getline(std::cin, fen);
+    std::string remaining_overage_time;
+    std::getline(std::cin, remaining_overage_time);
+    time_remaining_ms = std::stof(remaining_overage_time) * 1000;
+    // std::cerr << "time_remaining_ms: " << time_remaining_ms << std::endl;
 
     search(fen);
   }
