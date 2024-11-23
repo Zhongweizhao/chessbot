@@ -237,6 +237,9 @@ int quiescence(Board &board, int alpha, int beta,
 
   Movelist moves;
   movegen::legalmoves<movegen::MoveGenType::CAPTURE>(moves, board);
+  ScoreMoves(board, moves);
+  std::sort(moves.begin(), moves.end(),
+            [](const Move &a, const Move &b) { return a.score() > b.score(); });
 
   for (const auto &move : moves) {
     board.makeMove(move);
