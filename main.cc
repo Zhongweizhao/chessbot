@@ -11,6 +11,197 @@ using namespace chess;
 constexpr int INF = 9999999;
 constexpr int NINF = -INF;
 
+static constexpr int DOUBLE_PAWN_PENALTY = -10;
+static constexpr int ISOLATED_PAWN_PENALTY = -10;
+
+static constexpr int WHITE_PASSED_PAWN_BONUS[8] = {0,  10,  30,  50,
+                                                   75, 100, 150, 200};
+static constexpr int BLACK_PASSED_PAWN_BONUS[8] = {200, 150, 100, 75,
+                                                   50,  30,  10,  0};
+
+static constexpr uint64_t FILE_MASK[64] = {
+    0x101010101010101,  0x202020202020202,  0x404040404040404,
+    0x808080808080808,  0x1010101010101010, 0x2020202020202020,
+    0x4040404040404040, 0x8080808080808080, 0x101010101010101,
+    0x202020202020202,  0x404040404040404,  0x808080808080808,
+    0x1010101010101010, 0x2020202020202020, 0x4040404040404040,
+    0x8080808080808080, 0x101010101010101,  0x202020202020202,
+    0x404040404040404,  0x808080808080808,  0x1010101010101010,
+    0x2020202020202020, 0x4040404040404040, 0x8080808080808080,
+    0x101010101010101,  0x202020202020202,  0x404040404040404,
+    0x808080808080808,  0x1010101010101010, 0x2020202020202020,
+    0x4040404040404040, 0x8080808080808080, 0x101010101010101,
+    0x202020202020202,  0x404040404040404,  0x808080808080808,
+    0x1010101010101010, 0x2020202020202020, 0x4040404040404040,
+    0x8080808080808080, 0x101010101010101,  0x202020202020202,
+    0x404040404040404,  0x808080808080808,  0x1010101010101010,
+    0x2020202020202020, 0x4040404040404040, 0x8080808080808080,
+    0x101010101010101,  0x202020202020202,  0x404040404040404,
+    0x808080808080808,  0x1010101010101010, 0x2020202020202020,
+    0x4040404040404040, 0x8080808080808080, 0x101010101010101,
+    0x202020202020202,  0x404040404040404,  0x808080808080808,
+    0x1010101010101010, 0x2020202020202020, 0x4040404040404040,
+    0x8080808080808080};
+
+static constexpr uint64_t ISOLATED_PAWN_MASK[64] = {
+    0x202020202020202,  0x505050505050505,  0xa0a0a0a0a0a0a0a,
+    0x1414141414141414, 0x2828282828282828, 0x5050505050505050,
+    0xa0a0a0a0a0a0a0a0, 0x4040404040404040, 0x202020202020202,
+    0x505050505050505,  0xa0a0a0a0a0a0a0a,  0x1414141414141414,
+    0x2828282828282828, 0x5050505050505050, 0xa0a0a0a0a0a0a0a0,
+    0x4040404040404040, 0x202020202020202,  0x505050505050505,
+    0xa0a0a0a0a0a0a0a,  0x1414141414141414, 0x2828282828282828,
+    0x5050505050505050, 0xa0a0a0a0a0a0a0a0, 0x4040404040404040,
+    0x202020202020202,  0x505050505050505,  0xa0a0a0a0a0a0a0a,
+    0x1414141414141414, 0x2828282828282828, 0x5050505050505050,
+    0xa0a0a0a0a0a0a0a0, 0x4040404040404040, 0x202020202020202,
+    0x505050505050505,  0xa0a0a0a0a0a0a0a,  0x1414141414141414,
+    0x2828282828282828, 0x5050505050505050, 0xa0a0a0a0a0a0a0a0,
+    0x4040404040404040, 0x202020202020202,  0x505050505050505,
+    0xa0a0a0a0a0a0a0a,  0x1414141414141414, 0x2828282828282828,
+    0x5050505050505050, 0xa0a0a0a0a0a0a0a0, 0x4040404040404040,
+    0x202020202020202,  0x505050505050505,  0xa0a0a0a0a0a0a0a,
+    0x1414141414141414, 0x2828282828282828, 0x5050505050505050,
+    0xa0a0a0a0a0a0a0a0, 0x4040404040404040, 0x202020202020202,
+    0x505050505050505,  0xa0a0a0a0a0a0a0a,  0x1414141414141414,
+    0x2828282828282828, 0x5050505050505050, 0xa0a0a0a0a0a0a0a0,
+    0x4040404040404040,
+};
+
+static constexpr uint64_t WHITE_PASSED_PAWN_MASK[64] = {
+    0x303030303030300,
+    0x707070707070700,
+    0xe0e0e0e0e0e0e00,
+    0x1c1c1c1c1c1c1c00,
+    0x3838383838383800,
+    0x7070707070707000,
+    0xe0e0e0e0e0e0e000,
+    0xc0c0c0c0c0c0c000,
+    0x303030303030000,
+    0x707070707070000,
+    0xe0e0e0e0e0e0000,
+    0x1c1c1c1c1c1c0000,
+    0x3838383838380000,
+    0x7070707070700000,
+    0xe0e0e0e0e0e00000,
+    0xc0c0c0c0c0c00000,
+    0x303030303000000,
+    0x707070707000000,
+    0xe0e0e0e0e000000,
+    0x1c1c1c1c1c000000,
+    0x3838383838000000,
+    0x7070707070000000,
+    0xe0e0e0e0e0000000,
+    0xc0c0c0c0c0000000,
+    0x303030300000000,
+    0x707070700000000,
+    0xe0e0e0e00000000,
+    0x1c1c1c1c00000000,
+    0x3838383800000000,
+    0x7070707000000000,
+    0xe0e0e0e000000000,
+    0xc0c0c0c000000000,
+    0x303030000000000,
+    0x707070000000000,
+    0xe0e0e0000000000,
+    0x1c1c1c0000000000,
+    0x3838380000000000,
+    0x7070700000000000,
+    0xe0e0e00000000000,
+    0xc0c0c00000000000,
+    0x303000000000000,
+    0x707000000000000,
+    0xe0e000000000000,
+    0x1c1c000000000000,
+    0x3838000000000000,
+    0x7070000000000000,
+    0xe0e0000000000000,
+    0xc0c0000000000000,
+    0x300000000000000,
+    0x700000000000000,
+    0xe00000000000000,
+    0x1c00000000000000,
+    0x3800000000000000,
+    0x7000000000000000,
+    0xe000000000000000,
+    0xc000000000000000,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+};
+
+static constexpr uint64_t BLACK_PASSED_PAWN_MASK[64] = {
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x3,
+    0x7,
+    0xe,
+    0x1c,
+    0x38,
+    0x70,
+    0xe0,
+    0xc0,
+    0x303,
+    0x707,
+    0xe0e,
+    0x1c1c,
+    0x3838,
+    0x7070,
+    0xe0e0,
+    0xc0c0,
+    0x30303,
+    0x70707,
+    0xe0e0e,
+    0x1c1c1c,
+    0x383838,
+    0x707070,
+    0xe0e0e0,
+    0xc0c0c0,
+    0x3030303,
+    0x7070707,
+    0xe0e0e0e,
+    0x1c1c1c1c,
+    0x38383838,
+    0x70707070,
+    0xe0e0e0e0,
+    0xc0c0c0c0,
+    0x303030303,
+    0x707070707,
+    0xe0e0e0e0e,
+    0x1c1c1c1c1c,
+    0x3838383838,
+    0x7070707070,
+    0xe0e0e0e0e0,
+    0xc0c0c0c0c0,
+    0x30303030303,
+    0x70707070707,
+    0xe0e0e0e0e0e,
+    0x1c1c1c1c1c1c,
+    0x383838383838,
+    0x707070707070,
+    0xe0e0e0e0e0e0,
+    0xc0c0c0c0c0c0,
+    0x3030303030303,
+    0x7070707070707,
+    0xe0e0e0e0e0e0e,
+    0x1c1c1c1c1c1c1c,
+    0x38383838383838,
+    0x70707070707070,
+    0xe0e0e0e0e0e0e0,
+    0xc0c0c0c0c0c0c0,
+};
+
 static constexpr uint8_t WHITE_SQ_INDEX[64] = {
     56, 57, 58, 59, 60, 61, 62, 63,  //
     48, 49, 50, 51, 52, 53, 54, 55,  //
@@ -186,6 +377,7 @@ int Evaluate(const Board &board) {
         else
           sq = BLACK_SQ_INDEX[sq];
         target += (value + sq_value[sq]) * sign;
+        // target += value * sign;
       }
     };
     f(base_eval, queens, QUEEN_SQ_VALUE, 900);
@@ -196,6 +388,57 @@ int Evaluate(const Board &board) {
     f(endgame_eval, pawns, PAWN_ENDGAME_SQ_VALUE, 100);
     f(opening_eval, king, KING_OPENING_SQ_VALUE, 20000);
     f(endgame_eval, king, KING_ENDGAME_SQ_VALUE, 20000);
+
+    auto pawn_position_value = [&board, &c, &sign](int &target,
+                                                   Bitboard pawns) {
+      uint64_t our_pawns = board.pieces(PieceType::PAWN, c).getBits();
+      uint64_t their_pawns = board.pieces(PieceType::PAWN, ~c).getBits();
+      while (pawns) {
+        Square sq = pawns.pop();
+        // Double pawn
+        uint64_t double_pawns = FILE_MASK[sq.index()] & our_pawns;
+        bool not_double =
+            (double_pawns & (double_pawns - 1)) == 0 && double_pawns != 0;
+        if (!not_double) {
+          // std::cout << "applying double pawn penalty" << std::endl;
+          target += DOUBLE_PAWN_PENALTY * sign;
+        }
+
+        // Isolated pawn
+        uint64_t neighbor_pawns = ISOLATED_PAWN_MASK[sq.index()] & our_pawns;
+        // std::cout << Bitboard(isolated_pawns) << std::endl;
+        if (neighbor_pawns == 0) {
+          // std::cout << "applying isolated pawn penalty" << std::endl;
+          target += ISOLATED_PAWN_PENALTY * sign;
+        }
+
+        // Passed pawn
+        uint64_t passed_pawn_blocker =
+            ((c == Color::WHITE) ? WHITE_PASSED_PAWN_MASK[sq.index()]
+                                 : BLACK_PASSED_PAWN_MASK[sq.index()]) &
+            their_pawns;
+        if (passed_pawn_blocker == 0) {
+          int bonus = (c == Color::WHITE ? WHITE_PASSED_PAWN_BONUS[sq.rank()]
+                                         : BLACK_PASSED_PAWN_BONUS[sq.rank()]);
+          // std::cout << "applying passed pawn bonus " << bonus << std::endl;
+          target += bonus * sign;
+        }
+      }
+    };
+
+    pawn_position_value(base_eval, pawns);
+
+    auto king_safety_value = [&board, &c, &sign](int &target, Bitboard king) {
+      while (king) {
+        auto sq = king.pop();
+        Bitboard occ = board.us(c);
+        Bitboard occ_their = board.us(~c);
+        Bitboard neighbor = attacks::king(sq) & occ;
+        Bitboard neighbor_their = attacks::king(sq) & occ_their;
+        target += (neighbor.count() - neighbor_their.count()) * 15 * sign;
+      }
+    };
+    king_safety_value(opening_eval, king);
   }
   float phase = num_pieces / 32.0f;
   return base_eval + opening_eval * phase + (1 - phase) * endgame_eval;
@@ -518,7 +761,17 @@ void search(std::string &fen) {
             << " milliseconds total_time " << total_time_used_ms << std::endl;
 }
 
+constexpr bool debug = false;
 int main(int argc, char **argv) {
+  if constexpr (debug) {
+    std::cout << "debug mode" << std::endl;
+    std::string fen = "8/p1P5/8/8/8/8/PPp5/KR6 w - - 0 1";
+    Board board(fen);
+    std::cout << board << std::endl;
+    std::cout << Evaluate(board) << std::endl;
+    return 0;
+  }
+
   std::ios::sync_with_stdio(false);
   std::cerr << "start" << std::endl;
 
