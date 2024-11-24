@@ -398,10 +398,10 @@ void search(std::string &fen) {
   ResetGlobal();
 
   int allocated_time = 0;
-  if (time_remaining_ms >= 3000) {
-    allocated_time = 390;
-  } else if (time_remaining_ms >= 1000) {
-    allocated_time = 190;
+  if (time_remaining_ms >= 4000) {
+    allocated_time = 360;
+  } else if (time_remaining_ms >= 2000) {
+    allocated_time = 180;
   } else {
     allocated_time = 90;
   }
