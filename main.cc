@@ -84,6 +84,7 @@ static constexpr int KING_ENDGAME_SQ_VALUE[64] = {
 
 static std::map<PackedBoard, int> board_repetition = {};
 int time_remaining_ms = 0;
+int total_time_used_ms = 0;
 
 // Move score from attacker to victim
 // PAWN KNIGHT BISHOP ROOK QUEEN KING
@@ -142,7 +143,8 @@ int Evaluate(const Board &board) {
     auto pawns = board.pieces(PieceType::PAWN, c);
 
     int sign = (c == Color::WHITE) ? 1 : -1;
-    auto f = [&num_pieces, &c, &sign](int &target, auto &pieces, auto sq_value,
+    // pieces bitboard is copied
+    auto f = [&num_pieces, &c, &sign](int &target, auto pieces, auto sq_value,
                                       int value) {
       while (pieces) {
         num_pieces++;
@@ -282,6 +284,19 @@ int negamax(Board &board, int depth, int alpha, int beta,
 
   nodes++;
 
+  bool in_check = board.inCheck();
+
+  // Null move reduction
+  if (depth >= 3 && !in_check && ply > 0) {
+    board.makeNullMove();
+    int R = 2;
+    int score = -negamax(board, depth - 1 - R, -beta, -beta + 1, deadline);
+    board.unmakeNullMove();
+    if (score >= beta) {
+      return beta;
+    }
+  }
+
   // Score moves for better pruning.
   Movelist moves;
   movegen::legalmoves<movegen::MoveGenType::ALL>(moves, board);
@@ -290,16 +305,14 @@ int negamax(Board &board, int depth, int alpha, int beta,
             [](const Move &a, const Move &b) { return a.score() > b.score(); });
 
   if (moves.empty()) {
-    Color color = board.sideToMove();
     // Lose
-    if (board.inCheck()) return -999999 + ply;
+    if (in_check) return -999999 + ply;
     // Draw
     return 0;
   }
 
   bool found_pv = false;
   int moves_searched = 0;
-  bool is_in_check = board.inCheck();
 
   for (const auto &move : moves) {
     board.makeMove(move);
@@ -320,7 +333,7 @@ int negamax(Board &board, int depth, int alpha, int beta,
       };
       // late move reduction
       if (moves_searched >= FULL_DEPTH_MOVE && depth >= REDUCTION_LIMIT &&
-          !is_in_check) {
+          !in_check) {
         eval = -negamax(board, depth - 2, -alpha - 1, -alpha, deadline);
         if (eval > alpha) full_depth_search();
       } else {
@@ -384,12 +397,16 @@ void search(std::string &fen) {
 
   ResetGlobal();
 
-  int extra_time = 0;
-  if (time_remaining_ms >= 250) {
-    extra_time = 99;
+  int allocated_time = 0;
+  if (time_remaining_ms >= 3000) {
+    allocated_time = 390;
+  } else if (time_remaining_ms >= 1000) {
+    allocated_time = 190;
+  } else {
+    allocated_time = 90;
   }
   const std::chrono::time_point<std::chrono::high_resolution_clock> deadline =
-      start + std::chrono::milliseconds(99 + extra_time);
+      start + std::chrono::milliseconds(allocated_time);
 
   Board board = Board(fen);
   // Track the board state after the opponent played, for third fold repetition
@@ -400,11 +417,31 @@ void search(std::string &fen) {
   int completed_depth = 0;
   // Backup three fold repetition tracker
   std::map<PackedBoard, int> board_repetition_cp = board_repetition;
-  try {
-    for (; completed_depth <= 20; ++completed_depth) {
-      follow_pv = 1;
-      eval = negamax(board, completed_depth + 1, NINF, INF, deadline);
 
+  // Iterative deepening
+  try {
+    int alpha = NINF;
+    int beta = INF;
+    for (; completed_depth <= 20;) {
+      follow_pv = 1;
+      eval = negamax(board, completed_depth + 1, alpha, beta, deadline);
+
+      // Aspiration window
+      if (eval <= alpha || eval >= beta) {
+        // reset to full width window
+        // std::cerr << "aspiration window failed" << std::endl;
+        alpha = NINF;
+        beta = INF;
+        continue;
+      }
+      // Setup window for next depth.
+      static int ASPIRATION_WINDOW = 50;
+      alpha = eval - ASPIRATION_WINDOW;
+      beta = eval + ASPIRATION_WINDOW;
+
+      // Increment depth
+      ++completed_depth;
+      // Store completed depth pv_table, and prepare new one for next depth.
       auto *temp = prev_pv_table;
       prev_pv_table = cur_pv_table;
       cur_pv_table = temp;
@@ -418,16 +455,6 @@ void search(std::string &fen) {
   }
 
   auto end = std::chrono::high_resolution_clock::now();
-  auto duration_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-          .count();
-
-  std::cerr << "iteration " << completed_depth << " eval " << std::showpos
-            << (board.sideToMove() == Color::WHITE ? eval : -eval)
-            << std::noshowpos << " pv ";
-  PrevPvToStderr();
-  std::cerr << " nodes " << nodes << " time " << duration_ms << " milliseconds"
-            << std::endl;
 
   auto best_move = (*prev_pv_table)[0][0];
   if (best_move != Move::NO_MOVE) {
@@ -438,12 +465,25 @@ void search(std::string &fen) {
   } else {
     std::cout << "error" << std::endl;
   }
+
+  auto duration_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+          .count();
+  total_time_used_ms += duration_ms;
+
+  std::cerr << "iteration " << completed_depth << " eval " << std::showpos
+            << (board.sideToMove() == Color::WHITE ? eval : -eval)
+            << std::noshowpos << " pv ";
+  PrevPvToStderr();
+  std::cerr << " nodes " << nodes << " time " << duration_ms
+            << " milliseconds total_time " << total_time_used_ms << std::endl;
 }
 
 int main(int argc, char **argv) {
   std::ios::sync_with_stdio(false);
   std::cerr << "start" << std::endl;
 
+  total_time_used_ms = 0;
   for (;;) {
     std::string fen;
     std::getline(std::cin, fen);
