@@ -539,6 +539,8 @@ int quiescence(Board &board, int alpha, int beta,
   return alpha;
 }
 
+bool in_null_move_reduction = false;
+
 int negamax(Board &board, int depth, int alpha, int beta,
             const std::chrono::time_point<std::chrono::high_resolution_clock>
                 &deadline) {
@@ -566,13 +568,18 @@ int negamax(Board &board, int depth, int alpha, int beta,
   bool in_check = board.inCheck();
 
   // Null move reduction
-  if (depth >= 3 && !in_check && ply > 0) {
-    board.makeNullMove();
-    int R = 2;
-    int score = -negamax(board, depth - 1 - R, -beta, -beta + 1, deadline);
-    board.unmakeNullMove();
-    if (score >= beta) {
-      return beta;
+  if (!in_null_move_reduction && !follow_pv && depth >= 3 && !in_check && ply > 0) {
+    int static_eval = Evaluate(board);
+    if (static_eval >= beta) {
+      in_null_move_reduction = true;
+      board.makeNullMove();
+      int R = 2;
+      int score = -negamax(board, depth - 1 - R, -beta, -beta + 1, deadline);
+      board.unmakeNullMove();
+      in_null_move_reduction = false;
+      if (score >= beta) {
+        return beta;
+      }
     }
   }
 
@@ -678,7 +685,7 @@ void search(std::string &fen) {
 
   int allocated_time = 0;
   if (time_remaining_ms >= 4000) {
-    allocated_time = 360;
+    allocated_time = 8000;
   } else if (time_remaining_ms >= 2000) {
     allocated_time = 180;
   } else {
