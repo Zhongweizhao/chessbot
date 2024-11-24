@@ -471,8 +471,11 @@ void search(std::string &fen) {
           .count();
   total_time_used_ms += duration_ms;
 
-  std::cerr << "iteration " << completed_depth << " eval " << std::showpos
-            << (board.sideToMove() == Color::WHITE ? eval : -eval)
+  std::cerr << "iteration " << completed_depth << " eval "
+            << std::showpos
+            // We have made a move and the board is for the opponent so the eval
+            // sign is flipped.
+            << (board.sideToMove() == Color::WHITE ? -eval : eval)
             << std::noshowpos << " pv ";
   PrevPvToStderr();
   std::cerr << " nodes " << nodes << " time " << duration_ms
